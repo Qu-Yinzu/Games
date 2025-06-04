@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    margin: 0;
+    padding: 2rem 1rem;
+    color: #f9f9f9;
+  }
+  h1 {
+    margin-bottom: 0.2rem;
+    font-weight: 600;
+    font-size: 2.8rem;
+    letter-spacing: 0.05em;
+    text-shadow: 1px 1px 6px rgba(0,0,0,0.35);
+  }
+  #game {
+    margin-top: 1.5rem;
+    width: 320px;
+    height: 320px;
+    background: #292c48;
+    border-radius: 12px;
+    box-shadow: 0 8px 15px rgba(0,0,0,0.4);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 6px;
+    user-select: none;
+  }
+  .tile {
+    background: linear-gradient(145deg, #8e9afe, #625bf7);
+    color: white;
+    font-weight: 700;
+    font-size: 1.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    box-shadow:  5px 5px 10px #574ed7, -5px -5px 10px #a0a9ff;
+    cursor: pointer;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .tile:hover {
+    box-shadow: 10px 10px 20px #463ccc, -10px -10px 20px #aab2ff;
+    transform: scale(1.05);
+  }
+  .empty {
+    background: transparent;
+    cursor: default;
+    box-shadow: none;
+  }
+  #info {
+    margin-top: 1rem;
+    font-weight: 600;
+    font-size: 1.25rem;
+    user-select: none;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  }
+  #buttons {
+    margin-top: 1.5rem;
+    display: flex;
+    gap: 20px;
+  }
+  button {
+    background: #7367f0;
+    border: none;
+    color: white;
+    padding: 0.7rem 1.6rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 30px;
+    cursor: pointer;
+    box-shadow: 0 6px 12px rgba(115, 103, 240, 0.7);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+  }
+  button:hover {
+    background: #5c52c1;
+    box-shadow: 0 9px 18px rgba(92, 82, 193, 0.9);
+  }
+  #message {
+    margin-top: 1rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #ffe066;
+    text-shadow: 0 0 10px #ffe066aa;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  #message.show {
+    opacity: 1;
+  }
