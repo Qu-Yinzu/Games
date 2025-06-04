@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>Space Shooter | Qu-Yinzu</title>
+<style>
+  /* Reset */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  html, body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: radial-gradient(ellipse at center, #000011 0%, #000000 80%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    user-select: none;
+  }
+
+  #game-container {
+    position: relative;
+    width: 350px;
+    height: 600px;
+    margin: 0 auto;
+    background: radial-gradient(ellipse at center, #00111f 0%, #000000 90%);
+    border: 2px solid #0ff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow:
+      0 0 15px #0ff,
+      inset 0 0 40px #0ff;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  #score-board {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    color: #0ff;
+    font-weight: 700;
+    font-size: 18px;
+    text-shadow: 0 0 5px #0ff;
+    user-select: none;
+  }
+
+  #instructions {
+    position: absolute;
+    bottom: 12px;
+    width: 100%;
+    text-align: center;
+    color: #0ff;
+    font-size: 14px;
+    user-select: none;
+    text-shadow: 0 0 5px #0ff;
+    font-weight: 600;
+  }
+
+  #game-over {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #0ff;
+    font-size: 28px;
+    font-weight: 900;
+    text-align: center;
+    text-shadow: 0 0 10px #0ff;
+    display: none;
+  }
+
+  #restart-btn {
+    margin-top: 15px;
+    background-color: #003344cc;
+    border: 2px solid #0ff;
+    color: #0ff;
+    font-size: 20px;
+    font-weight: 700;
+    padding: 10px 25px;
+    border-radius: 12px;
+    box-shadow: 0 0 8px #0ff;
+    cursor: pointer;
+    user-select: none;
+  }
+  #restart-btn:hover {
+    background-color: #0ff;
+    color: #003344;
+  }
+</style>
+</head>
+<body>
+  <div id="game-container" role="main" aria-label="Space shooter game with obstacles">
+    <canvas id="gameCanvas" width="350" height="600" aria-label="Game screen"></canvas>
+    <div id="score-board" aria-live="polite" aria-atomic="true" aria-relevant="text">Score: 0</div>
+    <div id="instructions">Use ←/→ to move, Space to shoot</div>
+    <div id="game-over" role="alert" aria-live="assertive">
+      Game Over<br />
+      <button id="restart-btn" aria-label="Restart game">Restart</button>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const scoreBoard = document.getElementById('score-board');
+  const gameOverDiv = document.getElementById('game-over');
+  const restartBtn = document.getElementById('restart-btn');
+
+  const canvasWidth = canvas.width;
+  const canvasHeight = canvas.height;
+
+  // Player specs
+  const playerWidth = 40;
+  const playerHeight = 50;
+  const playerY = canvasHeight - playerHeight - 10;
+  let playerX = (canvasWidth - playerWidth) / 2;
+
+  // Controls state
+  let movingLeft = false;
+  let movingRight = false;
+  let shooting = false;
+
+  // Bullets
+  const bullets = [];
+  const bulletWidth = 6;
+  const bulletHeight = 12;
+  const bulletSpeed = 8;
+  const bulletCooldownMax = 15;
+  let bulletCooldown = 0;
+
+  // Obstacles
+  const obstacles = [];
+  const obstacleWidth = 36;
+  const obstacleHeight = 36;
+  const obstacleSpeedBase = 2;
+  let obstacleSpawnCooldown = 0;
+  let obstacleSpawnInterval = 60; // frames
+
+  // Game state
+  let score = 0;
+  let gameOver = false;
+  let animationId = null;
+
+  // Colors
+  const playerColor = '#0ff';
+  const bulletColor = '#0ff';
+  const obstacleColor = '#f33';
+
+  // Sound effects
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playBeep(frequency = 440, duration = 80) {
+    if (!audioCtx) return;
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    oscillator.frequency.value = frequency;
+    oscillator.type = 'square';
+    gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + duration / 1000);
+  }
+
+  // Draw player ship
+  function drawPlayer(x, y) {
+    ctx.save();
+    ctx.fillStyle = playerColor;
+    ctx.shadowColor = playerColor;
+    ctx.shadowBlur = 8;
+
+    // Body shape (triangle style)
+    ctx.beginPath();
+    ctx.moveTo(x + playerWidth/2, y);
+    ctx.lineTo(x + playerWidth*0.85, y + playerHeight*0.75);
+    ctx.lineTo(x + playerWidth*0.15, y + playerHeight*0.75);
+    ctx.closePath();
+    ctx.fill();
+
+    // Cockpit circle
+    ctx.beginPath();
+    ctx.fillStyle = '#0ff';
+    ctx.arc(x + playerWidth/2, y + playerHeight*0.35, playerWidth*0.12, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // Draw bullet
+  function drawBullet(b) {
+    ctx.save();
+    ctx.fillStyle = bulletColor;
+    ctx.shadowColor = bulletColor;
+    ctx.shadowBlur = 8;
+    ctx.fillRect(b.x, b.y, bulletWidth, bulletHeight);
+    ctx.restore();
+  }
+
+  // Draw obstacle (simple asteroid shape)
+  function drawObstacle(o) {
+    ctx.save();
+    ctx.fillStyle = obstacleColor;
+    ctx.shadowColor = obstacleColor;
+    ctx.shadowBlur = 12;
+
+    // Rough circle with some craters
+    ctx.beginPath();
+    ctx.ellipse(o.x + obstacleWidth/2, o.y + obstacleHeight/2, obstacleWidth/2, obstacleHeight/2, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = '#aa3333';
+    // Craters - small circles
+    ctx.beginPath();
+    ctx.arc(o.x + obstacleWidth*0.3, o.y + obstacleHeight*0.4, 6, 0, Math.PI*2);
+    ctx.arc(o.x + obstacleWidth*0.65, o.y + obstacleHeight*0.65, 8, 0, Math.PI*2);
+    ctx.arc(o.x + obstacleWidth*0.5, o.y + obstacleHeight*0.25, 5, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // Clear canvas
+  function clearScreen() {
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+  }
+
+  // Update player position based on controls
+  function updatePlayer() {
+    if (movingLeft) {
+      playerX -= 5;
+    }
+    if (movingRight) {
+      playerX += 5;
+    }
+    // Clamp inside canvas
+    playerX = Math.max(0, Math.min(canvasWidth - playerWidth, playerX));
+  }
+
+  // Update bullets positions, remove if off screen
+  function updateBullets() {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      bullets[i].y -= bulletSpeed;
+      if (bullets[i].y < -bulletHeight) {
+        bullets.splice(i, 1);
+      }
+    }
+  }
+
+  // Update obstacle positions, remove if off screen and lose game if collide player
+  function updateObstacles() {
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      obstacles[i].y += obstacles[i].speed;
+
+      // Check if obstacle hits player
+      if (checkCollision(
+        obstacles[i].x, obstacles[i].y, obstacleWidth, obstacleHeight,
+        playerX, playerY, playerWidth, playerHeight)) {
+        triggerGameOver();
+      }
+
+      if (obstacles[i].y > canvasHeight) {
+        obstacles.splice(i, 1);
+        // Optional: penalize score or do nothing for missed obstacles
+      }
+    }
+  }
+
+  // Spawn obstacles randomly on top
+  function spawnObstacle() {
+    const x = Math.random() * (canvasWidth - obstacleWidth);
+    const speed = obstacleSpeedBase + Math.random()*0.6 + score*0.01;
+    obstacles.push({x, y: -obstacleHeight, speed});
+  }
+
+  // Check collision between rectangles
+  function checkCollision(x1, y1, w1, h1, x2, y2, w2, h2) {
+    return !(x1 + w1 < x2 ||
+             x1 > x2 + w2 ||
+             y1 + h1 < y2 ||
+             y1 > y2 + h2);
+  }
+
+  // Handle bullets hitting obstacles
+  function handleCollisions() {
+    for (let i = obstacles.length -1; i >= 0; i--) {
+      let o = obstacles[i];
+      for(let j = bullets.length -1; j >= 0; j--) {
+        let b = bullets[j];
+        if (checkCollision(b.x, b.y, bulletWidth, bulletHeight, o.x, o.y, obstacleWidth, obstacleHeight)) {
+          // Remove both
+          obstacles.splice(i, 1);
+          bullets.splice(j, 1);
+          score++;
+          playBeep(650, 100);
+          // Speed up obstacle spawn rate every 5 points, minimum interval 20
+          if (score % 5 === 0 && obstacleSpawnInterval > 20) obstacleSpawnInterval -= 5;
+          break;
+        }
+      }
+    }
+  }
+
+  // Shoot bullet if cooldown passed
+  function shootBullet() {
+    if (bulletCooldown === 0 && !gameOver) {
+      const bulletX = playerX + playerWidth/2 - bulletWidth/2;
+      const bulletY = playerY - bulletHeight;
+      bullets.push({x: bulletX, y: bulletY});
+      bulletCooldown = bulletCooldownMax;
+      playBeep(800, 70);
+    }
+  }
+
+  // Trigger game over state and show UI
+  function triggerGameOver() {
+    gameOver = true;
+    gameOverDiv.style.display = 'block';
+    cancelAnimationFrame(animationId);
+  }
+
+  // Restart game
+  function restartGame() {
+    gameOver = false;
+    score = 0;
+    bullets.length = 0;
+    obstacles.length = 0;
+    playerX = (canvasWidth - playerWidth) / 2;
+    obstacleSpawnInterval = 60;
+    bulletCooldown = 0;
+    obstacleSpawnCooldown = 0;
+    gameOverDiv.style.display = 'none';
+    loop();
+  }
+
+  // Keyboard input handlers
+  function keyDownHandler(e) {
+    if (gameOver) return;
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') movingLeft = true;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') movingRight = true;
+    if (e.code === 'Space') shooting = true;
+  }
+  function keyUpHandler(e) {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') movingLeft = false;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') movingRight = false;
+    if (e.code === 'Space') shooting = false;
+  }
+
+  restartBtn.addEventListener('click', () => restartGame());
+
+  window.addEventListener('keydown', keyDownHandler);
+  window.addEventListener('keyup', keyUpHandler);
+
+  // Main game loop
+  function loop() {
+    clearScreen();
+
+    // Background stars
+    drawStars();
+
+    updatePlayer();
+    if (shooting) shootBullet();
+
+    if (bulletCooldown > 0) bulletCooldown--;
+
+    updateBullets();
+    updateObstacles();
+    handleCollisions();
+
+    // Draw everything
+    drawPlayer(playerX, playerY);
+    bullets.forEach(drawBullet);
+    obstacles.forEach(drawObstacle);
+
+    scoreBoard.textContent = 'Score: ' + score;
+
+    if (!gameOver) {
+      if (obstacleSpawnCooldown <= 0) {
+        spawnObstacle();
+        obstacleSpawnCooldown = obstacleSpawnInterval;
+      } else {
+        obstacleSpawnCooldown--;
+      }
+      animationId = requestAnimationFrame(loop);
+    }
+  }
+
+  // Draw random twinkling stars (low intensity dots)
+  function drawStars() {
+    ctx.save();
+    for (let i = 0; i < 50; i++) {
+      const starX = Math.random() * canvasWidth;
+      const starY = Math.random() * canvasHeight;
+      const radius = Math.random() * 1.2;
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(255,255,255,${Math.random()})`;
+      ctx.shadowColor = '#fff';
+      ctx.shadowBlur = 3;
+      ctx.arc(starX, starY, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Start game
+  loop();
+})();
+</script>
+</body>
+</html>
+
